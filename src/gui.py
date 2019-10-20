@@ -10,9 +10,12 @@ from pygame import mixer
 REDRAW_INTERVAL = 100  # ms
 ALL_INSTRUMENTS = ["S. Recorder", "8-Xun"]
 DIRTY_NAMES = {"S. Recorder": 'recorder', "8-xun": 'xun'}
+OUT_OF_RANGE_FILES = {"S. Recorder": "src/assets/failrecorder.gif"}
 
-MAJOR_KEYS = {"C Major": 0, "D Major": 2, "E Major": 4}
-MAJOR_LIST = ["C Major", "D Major", "E Major"]
+
+
+MAJOR_KEYS = {"C Major": 0, "D Major": 2, "E Major": 4, "-2": -2}
+MAJOR_LIST = ["C Major", "D Major", "E Major", "-2"]
 
 def make_filename(instrument, note):
     name = note[0].lower()+str(note[1])+DIRTY_NAMES[instrument]
@@ -162,17 +165,20 @@ class FingeringHelper(tk.Frame):
         print(self.redraw_ct, self.cur_note_screen, cur_partition_inds, cur_note)
 
         # if we aren't displaying a note but we should be
-        if not self.is_displaying_note and (self.redraw_ct >= cur_partition_inds[0]):
+        if not self.is_displaying_note and (self.redraw_ct + 1 >= cur_partition_inds[0]):
             # make the image
+            desired_filename = make_filename(self.instrument, cur_note)
             print(make_filename(self.instrument, cur_note))
-            self.display_image = tk.PhotoImage(file=make_filename(self.instrument, cur_note))
+            if not os.path.exists(desired_filename):
+                desired_filename = OUT_OF_RANGE_FILES[self.instrument]
+            self.display_image = tk.PhotoImage(file=desired_filename)
 
             # and put it on
             self.display_canvas.create_image(100, 400, image=self.display_image)
             self.is_displaying_note = True
 
         # if we are displaying an image but we should stop
-        elif self.is_displaying_note and (self.redraw_ct > cur_partition_inds[1]):
+        elif self.is_displaying_note and (self.redraw_ct > 1 + cur_partition_inds[1]):
             self.display_canvas.delete('all')
             self.is_displaying_note = False
             self.cur_note_screen += 1
