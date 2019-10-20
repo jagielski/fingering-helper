@@ -18,3 +18,7 @@ Play an mp3 file and display fingerings for the recorder alongside the music. Gr
 2. Prettiness/more instruments. The fingering diagrams could be implemented directly in the app, which would prevent them from jittering and would take up less space in the assets. More instruments would be very easy to add, too. It currently only supports the Soprano Recorder.
 
 3. User experience could be improved. Pause doesn't work very well, navigating within the file would be nice.
+
+4. General algorithmic and code health improvements. The way key change works is coupled with the pitch detection, but should be separate. Key change should be run on both channels. There may be faster algorithms within key change.
+
+5. More features! Changing the tempo, adjusting songs to fit in an instrument's dynamic range.
