@@ -1,21 +1,46 @@
-from math import floor
+import matplotlib.pyplot as plt
+import numpy as np
+import os
 import tkinter as tk
+
+from math import floor
+
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_agg import FigureCanvasAgg
+import matplotlib.backends.tkagg as tkagg
+
+from matplotlib.figure import Figure
+
+from pygame import mixer
+import PIL.Image
+import PIL.ImageTk
+
+
 from tkinter.filedialog import askopenfilename
 from tkinter.messagebox import showerror
-import os
+
 import pitch_processing
-from pygame import mixer
+
 
 
 REDRAW_INTERVAL = 100  # ms
 ALL_INSTRUMENTS = ["S. Recorder", "8-Xun"]
 DIRTY_NAMES = {"S. Recorder": 'recorder', "8-xun": 'xun'}
 OUT_OF_RANGE_FILES = {"S. Recorder": "src/assets/failrecorder.gif"}
-
+HARDCODED_PLOT_PATH = "src/assets/waveform.png"
 
 
 MAJOR_KEYS = {"C Major": 0, "D Major": 2, "E Major": 4, "-2": -2}
 MAJOR_LIST = ["C Major", "D Major", "E Major", "-2"]
+
+
+def make_arr_plot(new_mp3_arr):
+    fig = plt.figure(figsize=(6, 2.5))
+    plt.axis('off')
+    plt.plot(np.arange(new_mp3_arr.shape[0]), new_mp3_arr[:, 0])
+    plt.tight_layout()
+    plt.savefig(HARDCODED_PLOT_PATH)
+
 
 def make_filename(instrument, note):
     name = note[0].lower()+str(note[1])+DIRTY_NAMES[instrument]
@@ -28,12 +53,13 @@ def convert_partitions_to_redraw_frame(partitions, frame_rate):
     frame_partitions = []
     for partition in partitions:
         (s_start, s_end), note = partition
-        print(s_start, s_end, frame_rate, REDRAW_INTERVAL)
+
         redraw_start = (s_start * 1000.) / (REDRAW_INTERVAL * frame_rate)
         redraw_end = (s_end * 1000.) / (REDRAW_INTERVAL * frame_rate)
+
         frame_partition = (redraw_start, redraw_end), note
-        print(frame_partition)
         frame_partitions.append(frame_partition)
+
     return frame_partitions
 
 class FingeringHelper(tk.Frame):
@@ -50,14 +76,13 @@ class FingeringHelper(tk.Frame):
 
         self.instrument = ALL_INSTRUMENTS[0]
 
-        all_makers = [self.make_file_picker_button,
-                      self.make_play_button,
-                      self.make_pause_button,
-                      self.make_major_menu,
-                      self.make_progress_scroller,
-                      self.make_quit_button,
-                      self.make_display_canvas]
-        [make() for make in all_makers]
+        self.make_file_picker_button()
+        self.make_play_button()
+        self.make_pause_button()
+        self.make_major_menu()
+        self.make_progress_scroller()
+        self.make_quit_button()
+        self.make_display_canvas()
         self.fname = None
         mixer.init()
 
@@ -85,13 +110,20 @@ class FingeringHelper(tk.Frame):
 
     def make_progress_scroller(self):
         self.progress_canvas_width = 500
-        progress_canvas_height = 200
-        self.progress_canvas = tk.Canvas(self.music_frame, width=self.progress_canvas_width,
-                                         height=progress_canvas_height, bg="white")
+        self.progress_canvas_height = 200
+
+        self.progress_canvas = tk.Canvas(self.music_frame, width=self.progress_canvas_width, height=self.progress_canvas_height, bg='white')
         self.progress_canvas.grid(column=0, row=4)
-        self.progress_bar = self.progress_canvas.create_rectangle(0, 0, 5, progress_canvas_height, fill='orange')
+
         self.redraw_ct = 0
         self.progress_bar_x = 0
+
+    def draw_progress_scroller(self, mp3_arr):
+        make_arr_plot(mp3_arr)
+        im = PIL.Image.open(HARDCODED_PLOT_PATH)
+        self.waveform_plot = PIL.ImageTk.PhotoImage(im)
+        self.progress_canvas.create_image(self.progress_canvas_width/2, self.progress_canvas_height/2, image=self.waveform_plot)
+        self.progress_bar = self.progress_canvas.create_rectangle(0, 0, 5, self.progress_canvas_height, fill='orange')
 
     def make_display_canvas(self):
         self.display_canvas = tk.Canvas(self.display_frame, width=400, height=800, bg='white')
@@ -115,7 +147,8 @@ class FingeringHelper(tk.Frame):
                                                 ("All files", "*.*") ))
         if self.fname:
             process_ret = pitch_processing.process_file(self.fname, self.key_offset)
-            self.frame_rate, self.mp3_arr, self.all_notes, new_fname, _ = process_ret
+            self.frame_rate, self.mp3_arr, self.all_notes, new_fname, new_mp3_arr = process_ret
+            self.draw_progress_scroller(new_mp3_arr)
 
             print("got all notes")
             for v in self.all_notes:
@@ -125,7 +158,7 @@ class FingeringHelper(tk.Frame):
             self.all_notes_redraws = convert_partitions_to_redraw_frame(self.all_notes, self.frame_rate)
 
             # add a sentinel to prevent overstepping array in redraw()
-            self.all_notes_redraws.append(((self.total_redraws + 1, self.total_redraws + 1), ("A", 5)))
+            self.all_notes_redraws.append(((self.total_redraws + 5, self.total_redraws + 5), ("A", 5)))
 
             self.cur_note_screen = 0
             self.is_displaying_note = False
@@ -192,4 +225,3 @@ root.geometry('800x800')
 root.title('Fingering Helper!')
 app = FingeringHelper(master=root)
 root.mainloop()
-

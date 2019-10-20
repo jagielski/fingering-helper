@@ -102,20 +102,24 @@ def get_hz(partition, shift_key):
     spec = np.fft.fft(partition_vals)
     freq = np.fft.fftfreq(ind_range.shape[-1])
 
-    sort_map = np.argsort(freq)
-    rev_sort_map = np.argsort(sort_map)
-    new_spec = np.zeros_like(spec, dtype=np.complex128)
+    if shift_key == 0:
+        new_spec = spec
+        rev_partition = partition_vals
+    else:
+        sort_map = np.argsort(freq)
+        rev_sort_map = np.argsort(sort_map)
+        new_spec = np.zeros_like(spec, dtype=np.complex128)
     
-    sorted_freq = freq[sort_map]
+        sorted_freq = freq[sort_map]
     
-    shifted_freqs = freq * 2**(shift_key/12.)
-    for i in range(shifted_freqs.shape[0]):
-        freq_val = shifted_freqs[i]
-        spec_val = spec[i]
-        closest_ind = np.minimum(np.searchsorted(sorted_freq, freq_val), freq.shape[0]-1)
-        new_spec[rev_sort_map[closest_ind]] += spec_val
+        shifted_freqs = freq * 2**(shift_key/12.)
+        for i in range(shifted_freqs.shape[0]):
+            freq_val = shifted_freqs[i]
+            spec_val = spec[i]
+            closest_ind = np.minimum(np.searchsorted(sorted_freq, freq_val), freq.shape[0]-1)
+            new_spec[rev_sort_map[closest_ind]] += spec_val
     
-    rev_partition = np.fft.ifft(new_spec)
+        rev_partition = np.fft.ifft(new_spec)
 
     big_cutoff = np.percentile(np.abs(new_spec.real), 99.9)
 
@@ -125,10 +129,7 @@ def get_hz(partition, shift_key):
 
     hz = np.mean(big_freqs[freqs_in_range])
     
-    if shift_key == 0:
-        return hz, partition_vals
-    else:
-        return hz, rev_partition
+    return hz, partition_vals
 
 def hz_to_note(hz):
     # assumes A4 = 440 Hz
@@ -181,10 +182,8 @@ def overwrite_mp3_arr_new_key(mp3_arr, shifted_partitions):
 
 
 def make_new_fname(fname, shift_key):
-    print(os.path.split(fname))
     split_fname = list(os.path.split(fname))
     split_fname[-1] = str(shift_key) + "_" + split_fname[-1]
-    print(split_fname)
     return os.path.join(*split_fname)
 
 
