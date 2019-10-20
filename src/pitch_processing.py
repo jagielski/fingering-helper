@@ -1,12 +1,12 @@
 import mp3_utils
 import numpy as np
+import os
 
 MAGNITUDE_CUTOFF = 200  # cutoff for minimum signal amplitude
 ZERO_LEN_CUTOFF = 45  # smallest zero run length (44.1kHz)
-MIN_RUN_LEN = 150  # minimum run length to get pitch of (44.1kHz)
+MIN_RUN_LEN = 150  # minimum note length to get pitch of (44.1kHz)
 
 ALL_NOTE_NAMES = ['A', 'A#', 'B', 'C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#']
-
 
 def get_nonzero_blocks(arr):
     zero_entries = (arr == 0)
@@ -39,6 +39,8 @@ def partition_nonzero_blocks(arr, len_cutoff=1):
         partition_inds.append(end)
     all_runs = []
 
+    # this is a confusing way to write this function
+    
     if arr[0] != 0: # need to add the first block
         run_start = 0
         run_end = arr.shape[0] if len(partition_inds) == 0 else partition_inds[0]
@@ -93,23 +95,40 @@ def test():
     print(index_into_arr(partition_nonzero_blocks(tst_arr), tst_arr))
 
 
-def get_hz(partition):
+def get_hz(partition, shift_key):
     partition_inds, partition_vals = partition
     ind_range = np.arange(partition_inds[0], partition_inds[1])
     
     spec = np.fft.fft(partition_vals)
     freq = np.fft.fftfreq(ind_range.shape[-1])
-    
-    big_cutoff = np.percentile(np.abs(spec.real), 99.9)
 
-    big_freqs = 44100*np.abs(freq[np.where(np.abs(spec.real) > big_cutoff)])
+    sort_map = np.argsort(freq)
+    rev_sort_map = np.argsort(sort_map)
+    new_spec = np.zeros_like(spec, dtype=np.complex128)
+    
+    sorted_freq = freq[sort_map]
+    
+    shifted_freqs = freq * 2**(shift_key/12.)
+    for i in range(shifted_freqs.shape[0]):
+        freq_val = shifted_freqs[i]
+        spec_val = spec[i]
+        closest_ind = np.minimum(np.searchsorted(sorted_freq, freq_val), freq.shape[0]-1)
+        new_spec[rev_sort_map[closest_ind]] += spec_val
+    
+    rev_partition = np.fft.ifft(new_spec)
+
+    big_cutoff = np.percentile(np.abs(new_spec.real), 99.9)
+
+    big_freqs = 44100*np.abs(freq[np.where(np.abs(new_spec.real) > big_cutoff)])
     
     freqs_in_range = np.where(big_freqs < np.min(big_freqs) + 15)
 
     hz = np.mean(big_freqs[freqs_in_range])
-        
-    return hz
-
+    
+    if shift_key == 0:
+        return hz, partition_vals
+    else:
+        return hz, rev_partition
 
 def hz_to_note(hz):
     # assumes A4 = 440 Hz
@@ -123,14 +142,17 @@ def hz_to_note(hz):
     return note_name, octave
 
 
-def get_notes(partition_li):
+def get_notes(partition_li, shift_key=0):
     all_notes = []
+    shifted_partitions = []
     for i, partition in enumerate(partition_li):
         print("processing partition {}".format(i))
-        hz = get_hz(partition)
+        hz, shifted_vals = get_hz(partition, shift_key)
         note = hz_to_note(hz)
         all_notes.append((partition[0], note))
-    return all_notes
+        shifted_partition = (partition[0], shifted_vals)
+        shifted_partitions.append(shifted_partition)
+    return all_notes, shifted_partitions
 
 
 def squish_below_cutoff(arr):
@@ -150,7 +172,23 @@ def partition_full_mp3_arr(mp3_arr):
     return proc_mp3_partitions
 
 
-def process_file(fname):
+def overwrite_mp3_arr_new_key(mp3_arr, shifted_partitions):
+    new_mp3_arr = np.copy(mp3_arr)
+    for partition_inds, partition_vals in shifted_partitions:
+        part_start, part_end = partition_inds
+        new_mp3_arr[part_start:part_end, 0] = partition_vals
+    return new_mp3_arr
+
+
+def make_new_fname(fname, shift_key):
+    print(os.path.split(fname))
+    split_fname = list(os.path.split(fname))
+    split_fname[-1] = str(shift_key) + "_" + split_fname[-1]
+    print(split_fname)
+    return os.path.join(*split_fname)
+
+
+def process_file(fname, shift_key=0):
     # load file
     frame_rate, mp3_arr = mp3_utils.read(fname)
     print("loaded")
@@ -160,9 +198,18 @@ def process_file(fname):
     print("split into {} partitions".format(len(proc_mp3_partitions)))
 
     # get all notes
-    all_notes = get_notes(proc_mp3_partitions)
+    all_notes, shifted_partitions = get_notes(proc_mp3_partitions, shift_key)
+
+    # overwrite mp3_arr with changed key
+    if shift_key == 0:
+        return frame_rate, mp3_arr, all_notes, fname, mp3_arr
+
+    new_mp3_arr = overwrite_mp3_arr_new_key(mp3_arr, shifted_partitions)
+    # save new mp3 arr in the new key
+    new_fname = make_new_fname(fname, shift_key)
+    mp3_utils.write(new_fname, frame_rate, new_mp3_arr[:, 0])
     
-    return frame_rate, mp3_arr, all_notes
+    return frame_rate, mp3_arr, all_notes, new_fname, new_mp3_arr
 
 
 def setup_argparse():
@@ -175,7 +222,7 @@ def setup_argparse():
 if __name__=='__main__':
     parser = setup_argparse()
     args = parser.parse_args()
-    _, _, all_notes = process_file(args.fname)
+    _, _, all_notes, _ = process_file(args.fname)
     print("got all notes")
     for v in all_notes:
         print(v[1], v[0])

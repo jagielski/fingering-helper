@@ -9,19 +9,19 @@ from pygame import mixer
 
 REDRAW_INTERVAL = 100  # ms
 ALL_INSTRUMENTS = ["S. Recorder", "8-Xun"]
-ASSET_MAP = {"S. Recorder":
-                {
-                ("B", 5): "src/assets/b5recorder.gif",
-                ("A", 5): "src/assets/a5recorder.gif",
-                ("G", 4): "src/assets/g4recorder.gif"
-                },
-            "8-Xun":
-                {
-                }
-            }
+DIRTY_NAMES = {"S. Recorder": 'recorder', "8-xun": 'xun'}
+
+MAJOR_KEYS = {"C Major": 0, "D Major": 2, "E Major": 4}
+MAJOR_LIST = ["C Major", "D Major", "E Major"]
+
+def make_filename(instrument, note):
+    name = note[0].lower()+str(note[1])+DIRTY_NAMES[instrument]
+    fname = "src/assets/" + name + ".gif"
+    return fname
 
 
 def convert_partitions_to_redraw_frame(partitions, frame_rate):
+    # change the units from frames to redraws for each partition
     frame_partitions = []
     for partition in partitions:
         (s_start, s_end), note = partition
@@ -50,8 +50,9 @@ class FingeringHelper(tk.Frame):
         all_makers = [self.make_file_picker_button,
                       self.make_play_button,
                       self.make_pause_button,
-                      self.make_quit_button,
+                      self.make_major_menu,
                       self.make_progress_scroller,
+                      self.make_quit_button,
                       self.make_display_canvas]
         [make() for make in all_makers]
         self.fname = None
@@ -76,7 +77,7 @@ class FingeringHelper(tk.Frame):
     def make_quit_button(self):
         self.quit_button = tk.Button(self.music_frame, text="QUIT", fg="red",
                               command=self.master.destroy)
-        self.quit_button.grid(column=0, row=3)
+        self.quit_button.grid(column=0, row=5)
 
 
     def make_progress_scroller(self):
@@ -94,6 +95,15 @@ class FingeringHelper(tk.Frame):
         self.display_canvas.pack(expand=tk.YES, fill=tk.BOTH)
         self.display_image = None
 
+    def make_major_menu(self):
+        self.major_variable = tk.StringVar(self.display_frame)
+
+        self.major_variable.set("C Major")
+        self.key_offset = 0
+
+        self.major_menu = tk.OptionMenu(self.music_frame, self.major_variable, *MAJOR_LIST, command=self.set_major)
+        self.major_menu.grid(column=0, row=3)
+
     def make_instrument_menu(self):
         self.instrument_listbox = tk.OptionMenu()
 
@@ -101,8 +111,9 @@ class FingeringHelper(tk.Frame):
         self.fname = askopenfilename(filetypes=(("MP3 files", "*.mp3"),
                                                 ("All files", "*.*") ))
         if self.fname:
-            process_ret = pitch_processing.process_file(self.fname)
-            self.frame_rate, self.mp3_arr, self.all_notes = process_ret
+            process_ret = pitch_processing.process_file(self.fname, self.key_offset)
+            self.frame_rate, self.mp3_arr, self.all_notes, new_fname, _ = process_ret
+
             print("got all notes")
             for v in self.all_notes:
                 print(v[1], v[0])
@@ -117,7 +128,7 @@ class FingeringHelper(tk.Frame):
             self.is_displaying_note = False
 
             print("song length:", self.song_length)
-            mixer.music.load(self.fname)
+            mixer.music.load(new_fname)
 
         fname_end = os.path.split(self.fname)[-1]
         self.file_picker_button["text"] = "File picked: " + fname_end
@@ -132,6 +143,10 @@ class FingeringHelper(tk.Frame):
         mixer.music.play()
         self.master.after(REDRAW_INTERVAL, self.redraw)
 
+    
+    def set_major(self, event):
+        self.key_offset = MAJOR_KEYS[event]
+
 
     def redraw(self):
         self.redraw_ct += 1
@@ -145,12 +160,12 @@ class FingeringHelper(tk.Frame):
         
         cur_partition_inds, cur_note = self.all_notes_redraws[self.cur_note_screen]
         print(self.redraw_ct, self.cur_note_screen, cur_partition_inds, cur_note)
+
         # if we aren't displaying a note but we should be
         if not self.is_displaying_note and (self.redraw_ct >= cur_partition_inds[0]):
             # make the image
-            print(ASSET_MAP[self.instrument][cur_note])
-            #self.display_image = self.display_canvas.create_rectangle(0, 0, 200, 200, fill='orange')
-            self.display_image = tk.PhotoImage(file=ASSET_MAP[self.instrument][cur_note])
+            print(make_filename(self.instrument, cur_note))
+            self.display_image = tk.PhotoImage(file=make_filename(self.instrument, cur_note))
 
             # and put it on
             self.display_canvas.create_image(100, 400, image=self.display_image)
