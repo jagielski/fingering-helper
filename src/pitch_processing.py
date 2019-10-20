@@ -1,5 +1,4 @@
 import mp3_utils
-import matplotlib.pyplot as plt
 import numpy as np
 
 MAGNITUDE_CUTOFF = 200  # cutoff for minimum signal amplitude
@@ -101,15 +100,14 @@ def get_hz(partition):
     spec = np.fft.fft(partition_vals)
     freq = np.fft.fftfreq(ind_range.shape[-1])
     
-    #plt.plot(44100*freq, spec.real)
-    #plt.xlim(-5000, 5000)
-    #plt.plot(freq, spec.imag)
-    #plt.show()
+    big_cutoff = np.percentile(np.abs(spec.real), 99.9)
+
+    big_freqs = 44100*np.abs(freq[np.where(np.abs(spec.real) > big_cutoff)])
     
-    top_k = np.argpartition(np.abs(spec.real), -1)[-1:]
-    
-    hz = np.median(44100 * np.abs(freq[top_k]))
-    
+    freqs_in_range = np.where(big_freqs < np.min(big_freqs) + 15)
+
+    hz = np.mean(big_freqs[freqs_in_range])
+        
     return hz
 
 
@@ -153,19 +151,18 @@ def partition_full_mp3_arr(mp3_arr):
 
 
 def process_file(fname):
-    # load
+    # load file
     frame_rate, mp3_arr = mp3_utils.read(fname)
     print("loaded")
 
-    # partition
+    # partition np array
     proc_mp3_partitions = partition_full_mp3_arr(mp3_arr)
     print("split into {} partitions".format(len(proc_mp3_partitions)))
 
     # get all notes
     all_notes = get_notes(proc_mp3_partitions)
-    print("got all notes")
-    for v in all_notes:
-        print(v[1], v[0])
+    
+    return frame_rate, mp3_arr, all_notes
 
 
 def setup_argparse():
@@ -178,4 +175,7 @@ def setup_argparse():
 if __name__=='__main__':
     parser = setup_argparse()
     args = parser.parse_args()
-    process_file(args.fname)
+    _, _, all_notes = process_file(args.fname)
+    print("got all notes")
+    for v in all_notes:
+        print(v[1], v[0])

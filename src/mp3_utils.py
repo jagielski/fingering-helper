@@ -2,7 +2,7 @@ import pydub
 import numpy as np
 
 # downloaded from https://www.youtube.com/watch?v=_Frv85_twbc
-FILE = "/home/matthew/Documents/projects/shownotes/data/hotcrossbuns.mp3"
+FILE = "/home/matthew/Documents/projects/shownotes/fingering-helper/data/hotcrossbuns.mp3"
 
 
 # this is courtesy of stack overflow:
