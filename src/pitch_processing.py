@@ -107,7 +107,7 @@ def get_hz(partition, shift_key):
         rev_partition = partition_vals
     else:
         sort_map = np.argsort(freq)
-        rev_sort_map = np.argsort(sort_map)
+        rev_sort_map = np.argsort(sort_map)  # this is easy to do in linear time
         new_spec = np.zeros_like(spec, dtype=np.complex128)
     
         sorted_freq = freq[sort_map]
@@ -204,6 +204,7 @@ def process_file(fname, shift_key=0):
         return frame_rate, mp3_arr, all_notes, fname, mp3_arr
 
     new_mp3_arr = overwrite_mp3_arr_new_key(mp3_arr, shifted_partitions)
+
     # save new mp3 arr in the new key
     new_fname = make_new_fname(fname, shift_key)
     mp3_utils.write(new_fname, frame_rate, new_mp3_arr[:, 0])

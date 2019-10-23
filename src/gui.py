@@ -84,6 +84,7 @@ class FingeringHelper(tk.Frame):
         self.make_quit_button()
         self.make_display_canvas()
         self.fname = None
+        self.stop_redrawing = False
         mixer.init()
 
 
@@ -104,9 +105,9 @@ class FingeringHelper(tk.Frame):
 
     def make_quit_button(self):
         self.quit_button = tk.Button(self.music_frame, text="QUIT", fg="red",
-                              command=self.master.destroy)
+                              command=lambda : (mixer.music.stop() or self.master.destroy()))
         self.quit_button.grid(column=0, row=5)
-
+    
 
     def make_progress_scroller(self):
         self.progress_canvas_width = 500
@@ -146,39 +147,52 @@ class FingeringHelper(tk.Frame):
         self.fname = askopenfilename(filetypes=(("MP3 files", "*.mp3"),
                                                 ("All files", "*.*") ))
         if self.fname:
-            process_ret = pitch_processing.process_file(self.fname, self.key_offset)
-            self.frame_rate, self.mp3_arr, self.all_notes, new_fname, new_mp3_arr = process_ret
+            self.reinitialize()
+            self.frame_rate, self.mp3_arr, self.all_notes, new_fname, new_mp3_arr = pitch_processing.process_file(self.fname, self.key_offset)
             self.draw_progress_scroller(new_mp3_arr)
 
             print("got all notes")
             for v in self.all_notes:
                 print(v[1], v[0])
+
             self.song_length = self.mp3_arr.shape[0] / self.frame_rate
             self.total_redraws = self.song_length * 1000 / REDRAW_INTERVAL
             self.all_notes_redraws = convert_partitions_to_redraw_frame(self.all_notes, self.frame_rate)
 
             # add a sentinel to prevent overstepping array in redraw()
-            self.all_notes_redraws.append(((self.total_redraws + 5, self.total_redraws + 5), ("A", 5)))
-
-            self.cur_note_screen = 0
-            self.is_displaying_note = False
+            self.all_notes_redraws.append(((self.total_redraws + 10, self.total_redraws + 10), ("A", 5)))
 
             print("song length:", self.song_length)
             mixer.music.load(new_fname)
+            self.stop_redrawing = True
 
         fname_end = os.path.split(self.fname)[-1]
         self.file_picker_button["text"] = "File picked: " + fname_end
-        self.file_picker_button["command"] = None
+        #self.file_picker_button["command"] = None
 
+
+    def reinitialize(self):
+        if mixer.music.get_busy():
+            self.stop_music()
+
+        self.cur_note_screen = 0
+        self.is_displaying_note = False
+
+        self.progress_canvas.delete('all')
+        self.display_canvas.delete('all')
+
+        self.redraw_ct = 0
+        self.progress_bar_x = 0
 
     def stop_music(self):
-        mixer.music.stop()
+        mixer.music.pause()
+        self.stop_redrawing = True
 
 
     def play_music(self):
         mixer.music.play()
         self.master.after(REDRAW_INTERVAL, self.redraw)
-
+        self.stop_redrawing = False
     
     def set_major(self, event):
         self.key_offset = MAJOR_KEYS[event]
@@ -216,7 +230,7 @@ class FingeringHelper(tk.Frame):
             self.is_displaying_note = False
             self.cur_note_screen += 1
 
-        if mixer.music.get_busy():
+        if not self.stop_redrawing and mixer.music.get_busy():
             self.master.after(REDRAW_INTERVAL, self.redraw)
 
 

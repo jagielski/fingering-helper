@@ -3,6 +3,8 @@ Play an mp3 file and display fingerings for the recorder alongside the music. Gr
 
 ## Usage
 
+python src/gui.py
+
 1. Identify an mp3 file of interest! It should be pretty noise-free, and cannot contain any slurred notes. This youtube channel produces excellent videos for this purpose: https://www.youtube.com/channel/UCjRO1LHScDOXa-hR8u0ZO2A.
 
 2. Choose your key! Only a couple are supported right now, and C Major is assumed. Changing the key will decrease the quality of the sound.
