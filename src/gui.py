@@ -5,20 +5,13 @@ import tkinter as tk
 
 from math import floor
 
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.backends.backend_agg import FigureCanvasAgg
-import matplotlib.backends.tkagg as tkagg
-
 from matplotlib.figure import Figure
 
 from pygame import mixer
 import PIL.Image
 import PIL.ImageTk
 
-
-from tkinter.filedialog import askopenfilename
-from tkinter.messagebox import showerror
-
+import fingerings
 import pitch_processing
 
 
@@ -42,7 +35,7 @@ def make_arr_plot(new_mp3_arr):
     plt.savefig(HARDCODED_PLOT_PATH)
 
 
-def make_filename(instrument, note):
+def make_note_display_filename(instrument, note):
     name = note[0].lower()+str(note[1])+DIRTY_NAMES[instrument]
     fname = "src/assets/" + name + ".gif"
     return fname
@@ -74,6 +67,9 @@ class FingeringHelper(tk.Frame):
         self.music_frame.grid(row=0, column=0)
         self.display_frame.grid(row=0, column=1)
 
+        self.fname = None
+        self.stop_redrawing = False
+
         self.instrument = ALL_INSTRUMENTS[0]
 
         self.make_file_picker_button()
@@ -83,8 +79,7 @@ class FingeringHelper(tk.Frame):
         self.make_progress_scroller()
         self.make_quit_button()
         self.make_display_canvas()
-        self.fname = None
-        self.stop_redrawing = False
+
         mixer.init()
 
 
@@ -105,7 +100,7 @@ class FingeringHelper(tk.Frame):
 
     def make_quit_button(self):
         self.quit_button = tk.Button(self.music_frame, text="QUIT", fg="red",
-                              command=lambda : (mixer.music.stop() or self.master.destroy()))
+                              command=lambda: (mixer.music.stop() or self.master.destroy()))
         self.quit_button.grid(column=0, row=5)
     
 
@@ -129,7 +124,8 @@ class FingeringHelper(tk.Frame):
     def make_display_canvas(self):
         self.display_canvas = tk.Canvas(self.display_frame, width=400, height=800, bg='white')
         self.display_canvas.pack(expand=tk.YES, fill=tk.BOTH)
-        self.display_image = None
+        self.fingering_controller = fingerings.RecorderFingeringController(self.display_canvas)
+        #self.display_image = None
 
     def make_major_menu(self):
         self.major_variable = tk.StringVar(self.display_frame)
@@ -144,7 +140,7 @@ class FingeringHelper(tk.Frame):
         self.instrument_listbox = tk.OptionMenu()
 
     def pick_file(self):
-        self.fname = askopenfilename(filetypes=(("MP3 files", "*.mp3"),
+        self.fname = tk.filedialog.askopenfilename(filetypes=(("MP3 files", "*.mp3"),
                                                 ("All files", "*.*") ))
         if self.fname:
             self.reinitialize()
@@ -179,7 +175,7 @@ class FingeringHelper(tk.Frame):
         self.is_displaying_note = False
 
         self.progress_canvas.delete('all')
-        self.display_canvas.delete('all')
+        #self.display_canvas.delete('all')
 
         self.redraw_ct = 0
         self.progress_bar_x = 0
@@ -191,8 +187,9 @@ class FingeringHelper(tk.Frame):
 
     def play_music(self):
         mixer.music.play()
-        self.master.after(REDRAW_INTERVAL, self.redraw)
         self.stop_redrawing = False
+        self.master.after(REDRAW_INTERVAL, self.redraw)
+
     
     def set_major(self, event):
         self.key_offset = MAJOR_KEYS[event]
@@ -214,19 +211,20 @@ class FingeringHelper(tk.Frame):
         # if we aren't displaying a note but we should be
         if not self.is_displaying_note and (self.redraw_ct + 1 >= cur_partition_inds[0]):
             # make the image
-            desired_filename = make_filename(self.instrument, cur_note)
-            print(make_filename(self.instrument, cur_note))
-            if not os.path.exists(desired_filename):
-                desired_filename = OUT_OF_RANGE_FILES[self.instrument]
-            self.display_image = tk.PhotoImage(file=desired_filename)
+            #desired_filename = make_filename(self.instrument, cur_note)
+            #print(make_filename(self.instrument, cur_note))
+            #if not os.path.exists(desired_filename):
+            #    desired_filename = OUT_OF_RANGE_FILES[self.instrument]
+            #self.display_image = tk.PhotoImage(file=desired_filename)
 
             # and put it on
-            self.display_canvas.create_image(100, 400, image=self.display_image)
+            #self.display_canvas.create_image(100, 400, image=self.display_image)
             self.is_displaying_note = True
+            self.fingering_controller.draw_note(cur_note)
 
         # if we are displaying an image but we should stop
         elif self.is_displaying_note and (self.redraw_ct > 1 + cur_partition_inds[1]):
-            self.display_canvas.delete('all')
+            #self.display_canvas.delete('all')
             self.is_displaying_note = False
             self.cur_note_screen += 1
 
